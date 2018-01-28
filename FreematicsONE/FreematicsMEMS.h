@@ -248,6 +248,7 @@ protected:
   void readAccelData(int16_t *);
   int16_t readTempData();
   void initMPU9250();
+  void sleepMPU9250();
   void writeByte(uint8_t, uint8_t);
   uint8_t readByte(uint8_t);
   void readBytes(uint8_t, uint8_t, uint8_t *);

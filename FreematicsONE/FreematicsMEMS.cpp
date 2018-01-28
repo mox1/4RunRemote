@@ -492,7 +492,10 @@ void MPU9250_9DOF::readBytesAK(uint8_t subAddress, uint8_t count, uint8_t * dest
         dest[i++] = Wire.read();
   }
 }
-
+void MPU9250_ACC::sleepMPU9250() {
+  writeByte(PWR_MGMT_1, 0x40); // Put MPU9250 to sleep
+  delay(200);	
+} 
 void MPU9250_ACC::initMPU9250()
 {
  // wake up device
