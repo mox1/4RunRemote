@@ -912,3 +912,12 @@ void COBDSPI::xbTogglePower()
 	sendCommand("ATGSMPWR\r", buffer, sizeof(buffer));
 #endif
 }
+void COBDSPI::xbPowerOff() 
+{
+#ifdef PIN_XBEE_PWR
+	digitalWrite(PIN_XBEE_PWR, HIGH);
+	sleep(50);
+#ifdef XBEE_DEBUG
+	Serial.println("xBee power pin set to low");
+#endif
+}
