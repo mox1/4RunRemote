@@ -14,6 +14,10 @@
 #include <FreematicsONE.h>
 #include "config.h"
 
+//Yes I know this isn't standard, but it logically separates things
+//and makes it more readable.
+//#include "Rstart.cpp"
+//#include "Sim5360.cpp"
 
 
 
@@ -23,11 +27,8 @@ static char vin[20] = {0};
 static uint16_t connCount = 0;
 bool modemPower = false;
 
-int POWER_PIN = A1;
-int LOCK_BTN_PIN = A0;
 
-#define PIN_ON HIGH
-#define PIN_OFF LOW
+
 
 //HIGH = Turn relay on
 //LOW = Turn relay off
@@ -44,19 +45,60 @@ typedef struct {
   uint8_t second;
 } GSM_LOCATION;
 
-typedef enum {
-    NET_DISCONNECTED = 0,
-    NET_CONNECTED,
-    NET_HTTP_ERROR,
-} NET_STATES;
+class RSTART {
+  public:
+    void start_car() {
+      //TODO: Ensure Engine RPM == 0 before trying to start
+      power_on_key_fob();
+      //ok push set .5, .5 5.0
+      push_key_fob_btn(LOCK_BTN_PIN, 600);
+      push_key_fob_btn(LOCK_BTN_PIN, 600);
+      push_key_fob_btn(LOCK_BTN_PIN, 3000);
 
-typedef enum {
-  HTTP_GET = 0,
-  HTTP_POST,
-} HTTP_METHOD;
+      power_off_key_fob();
+    }
+    void power_on_key_fob() {
+      Serial.println("Power on KEY FOB");
+      digitalWrite(POWER_PIN, HIGH);
+      delay(2000);
+    }
+
+    void power_off_key_fob() {
+      Serial.println("Power OFF Key FOB");
+      digitalWrite(POWER_PIN, LOW);
+      delay(2000);
+    }
+  private:
+    void push_key_fob_btn(int btn, int msDuration) {
+      if (pin_status(btn) == HIGH) {
+        Serial.println("Not pushing, pin already HIGH!");
+        Serial.println(btn);
+        return;
+      }
+      Serial.println("START PUSH!");
+      //set pin high
+      digitalWrite(btn, HIGH);
+      //wait
+      delay(msDuration);
+      //set low
+      digitalWrite(btn, LOW);
+      //delay 1 sec
+      delay(500);
+      Serial.println("END PUSH!");
+    }
+
+
+    int pin_status(int pin) {
+      int resl;
+      resl = digitalRead(pin);
+      return (pin == HIGH) ? HIGH : LOW;
+
+    }
+};
+
 
 class CSIM5360 : public COBDSPI {
-public:
+  public:
     CSIM5360() { buffer[0] = 0; }
     bool netInit()
     {
@@ -179,27 +221,27 @@ public:
     {
       netSendCommand("AT+CHTTPSCLSE\r");
     }
-    bool httpConnect()
+    bool httpConnect(char *host, unsigned int port)
     {
-        sprintf_P(buffer, PSTR("AT+CHTTPSOPSE=\"%s\",%u,1\r"), HTTP_SERVER_HOST, HTTP_SERVER_PORT);
+        sprintf_P(buffer, PSTR("AT+CHTTPSOPSE=\"%s\",%u,1\r"), host, port);
         //Serial.println(buffer);
         return netSendCommand(buffer, MAX_CONN_TIME);
     }
-    unsigned int genHttpHeader(HTTP_METHOD method, const char* path, bool keepAlive, const char* payload, int payloadSize)
+    unsigned int genHttpHeader(HTTP_METHOD method, char *host, const char* path, bool keepAlive, const char* payload, int payloadSize)
     {
         // generate HTTP header
         char *p = buffer;
         p += sprintf_P(p, PSTR("%s %s HTTP/1.1\r\nUser-Agent: ONE\r\nHost: %s\r\nConnection: %s\r\n"),
-          method == HTTP_GET ? "GET" : "POST", path, HTTP_SERVER_HOST, keepAlive ? "keep-alive" : "close");
+          method == HTTP_GET ? "GET" : "POST", path, host, keepAlive ? "keep-alive" : "close");
         if (method == HTTP_POST) {
           p += sprintf_P(p, PSTR("Content-length: %u\r\n"), payloadSize);
         }
         p += sprintf_P(p, PSTR("\r\n\r"));
         return (unsigned int)(p - buffer);
     }
-    bool httpSend(HTTP_METHOD method, const char* path, bool keepAlive, const char* payload = 0, int payloadSize = 0)
+    bool httpSend(HTTP_METHOD method, char *host, const char* path, bool keepAlive, const char* payload = 0, int payloadSize = 0)
     {
-      unsigned int headerSize = genHttpHeader(method, path, keepAlive, payload, payloadSize);
+      unsigned int headerSize = genHttpHeader(method, host, path, keepAlive, payload, payloadSize);
       // issue HTTP send command
       sprintf_P(buffer, PSTR("AT+CHTTPSSEND=%u\r"), headerSize + payloadSize);
       if (!netSendCommand(buffer, 100, ">")) {
@@ -207,7 +249,7 @@ public:
         Serial.println("Connection closed");
       }
       // send HTTP header
-      genHttpHeader(method, path, keepAlive, payload, payloadSize);
+      genHttpHeader(method, host, path, keepAlive, payload, payloadSize);
       xbWrite(buffer);
       // send POST payload if any
       if (payload) xbWrite(payload);
@@ -280,71 +322,19 @@ public:
     char buffer[384];
 private:
     uint32_t checkTimer;
-}; //end SIM5360
-
+};
 CSIM5360 sim;
 byte netState = NET_DISCONNECTED;
 byte errors = 0;
 
 
-class RSTART {
+RSTART starter;
+
+
+class CGPRSRemoteStarter {
   public:
-    void start_car() {
-      //TODO: Ensure Engine RPM == 0 before trying to start
-      power_on_key_fob();
-      //ok push set .5, .5 5.0
-      push_key_fob_btn(LOCK_BTN_PIN, 600);
-      push_key_fob_btn(LOCK_BTN_PIN, 600);
-      push_key_fob_btn(LOCK_BTN_PIN, 3000);
-
-      power_off_key_fob();
-    }
-    void power_on_key_fob() {
-      Serial.println("Power on KEY FOB");
-      digitalWrite(POWER_PIN, HIGH);
-      delay(2000);
-    }
-
-    void power_off_key_fob() {
-      Serial.println("Power OFF Key FOB");
-      digitalWrite(POWER_PIN, LOW);
-      delay(2000);
-    }
-  private:
-    void push_key_fob_btn(int btn, int msDuration) {
-      if (pin_status(btn) == HIGH) {
-        Serial.println("Not pushing, pin already HIGH!");
-        Serial.println(btn);
-        return;
-      }
-      Serial.println("START PUSH!");
-      //set pin high
-      digitalWrite(btn, HIGH);
-      //wait
-      delay(msDuration);
-      //set low
-      digitalWrite(btn, LOW);
-      //delay 1 sec
-      delay(500);
-      Serial.println("END PUSH!");
-    }
-
-
-    int pin_status(int pin) {
-      int resl;
-      resl = digitalRead(pin);
-      return (pin == HIGH) ? HIGH : LOW;
-
-    }
-};
-RSTART starter; 
-
-
-class CGPRSRemoteStarter
-{
-  public:
-    void setup()
-    {
+    void doSetup() {
+      //key fob pin setup
       pinMode(POWER_PIN, OUTPUT);
       pinMode(LOCK_BTN_PIN, OUTPUT);
       delay(500);
@@ -353,10 +343,6 @@ class CGPRSRemoteStarter
       Serial.begin(115200);
       delay(500);
       Serial.println("Toyota GSM Remote Starter - by James Tyra");
-      // this will init SPI communication
-      sim.begin();
-      sim.xbBegin(XBEE_BAUDRATE);
-            
 #ifdef DO_OBD
       // connect to OBD port
       Serial.print("#OBD..");
@@ -385,11 +371,8 @@ class CGPRSRemoteStarter
 
 #endif
 
-    }
-
-
-    void loop()
-    {
+    } //end setup
+    void doLoop() {
 
       //Setup things
 #ifdef DO_OBD
@@ -404,15 +387,7 @@ class CGPRSRemoteStarter
       }
 
 #endif
-      Serial.println("Loop init 5360 HTTP");
-      if (startSim5360() == false) {
-        Serial.println("Sim card HTTP setup failed!?");
-        //jump to sleep
-        goLowPower();
-        return;      
-      }
 
-      //if we fall in here, net setup worked
       Serial.println("Get REMOTE CMD");
       int cmd = getRemoteCommand();
       //cmd < 1 == error, don't process it
@@ -421,122 +396,115 @@ class CGPRSRemoteStarter
         return;
       }
       //Process command
-      switch(cmd) {
+      switch (cmd) {
         case 1:
-        Serial.println("Success, but nothing to do!");
-        break;
+          Serial.println("Success, but nothing to do!");
+          break;
         case 2:
-        starter.start_car();
-        break;
+          starter.start_car();
+          break;
         default:
-        break;        
+          break;
       }
       //sleep
       goLowPower();
     }//end loop
   private:
+
     void goLowPower(int seconds = 180) {
       //TODO: Enter Lowest power state Possible
       //TODO: SLEEP
-      sim.xbPowerOff(); // turn off GSM power
+      sim.xbTogglePower();
+      delay(2000);
+      // discard any stale data
+      sim.xbPurge();
+
       delay(500);
       Serial.println("Entering Low Power Mode");
       sim.enterLowPowerMode();
-      sim.sleepSec(seconds);
+      sim.deepSleepSec(seconds);
       sim.leaveLowPowerMode();
     }
-    bool stopSim5360() {
-      sim.httpClose();
-      delay(1000);
-      return true;
-    }
-    bool startSim5360() {
-      // initialize SIM5360 xBee module (if present)
+
+    //returns amount of time to sleep
+    int getRemoteCommand(int sendcmd = 0) {
+      //this will setup the xbee 5360 module from scratch
+      //then send HTTP GET request
+      //then power xbee module back down
+      // Step #1 this will init SPI communication
+      sim.begin();
+      sim.xbBegin(XBEE_BAUDRATE);
+      // Step #2 initialize SIM5360 xBee module (if present)
       for (;;) {
         Serial.print("Init SIM5360...");
         if (sim.netInit()) {
           Serial.println("OK");
           break;
         } else {
-          Serial.println("NO");
-          return false;
+          Serial.println("Failed Step 2 (init 5360)");
+          return -2;
         }
       }
-  
+      //Step 3 - setup sim network
       Serial.print("Connecting network");
       if (sim.netSetup(APN, false)) {
         Serial.println("OK");
       } else {
-        Serial.println("NO");
-        return false;
+        Serial.println("Failed Step 3 (init cell network)");
+        return -3;
       }
-  
+      //(OPTIONAL) Step 4 - get various network info
       if (sim.getOperatorName()) {
         Serial.print("Operator:");
         Serial.println(sim.buffer);
       }
-  
+
       Serial.print("Obtaining IP address...");
       const char *ip = sim.getIP();
       if (ip) {
         Serial.print(ip);
       } else {
-        Serial.println("Get IP failed");
-        return false;
+        Serial.println("failed");
       }
-  
+
       int signal = sim.getSignal();
       if (signal > 0) {
         Serial.print("CSQ:");
         Serial.print((float)signal / 10, 1);
         Serial.println("dB");
       }
-  
-      Serial.print("Init HTTP...");
+      //Step 5 - Do HTTP connection
+      Serial.print("Step 5 - Init HTTP...");
       if (sim.httpOpen()) {
         Serial.println("OK");
       } else {
-        Serial.println("HTTP Init Failed");
-        return false;
+        Serial.println("NO");
       }
-      //NEtwork should be ready now
-      return true;
-      
-    }
- 
-
-    //returns amount of time to sleep
-    int getRemoteCommand()
-    {
-      // connect to HTTP server
-      if (netState != NET_CONNECTED) {
-        Serial.println("Connecting...");
-        sim.xbPurge();
-        if (!sim.httpConnect()) {
-          Serial.println("Error connecting");
-          Serial.println(sim.buffer);
-          errors++;
-          return -1;
-        }
+      //Step 6 - connect to HTTP server
+      Serial.println("Step 6 - connecting to HTTP server.");
+      sim.xbPurge();
+      if (!sim.httpConnect(HTTP_SERVER_HOST, HTTP_SERVER_PORT)) {
+        Serial.println("Error connecting ");
+        Serial.println(sim.buffer);
+        return -6;
+        return;
       }
-      //ok we setup
-      // send HTTP request
+      //Step 7 - Send HTTP request
       Serial.print("Sending HTTP request...");
-      if (!sim.httpSend(HTTP_GET, "/test", true)) {
-        Serial.println("failed");
+      if (!sim.httpSend(HTTP_GET, HTTP_SERVER_HOST, SERVER_PATH, true)) {
+        Serial.println("Failed Step 7");
         sim.httpClose();
-        errors++;
-        netState = NET_DISCONNECTED;
-        return -2;
+        return -7;
       } else {
         Serial.println("OK");
       }
-      //ok recv response
+      //STep 8 - Read HTTP response
       Serial.print("Receiving...");
       char *payload;
       if (sim.httpReceive(&payload)) {
         Serial.println("OK");
         Serial.println("-----HTTP RESPONSE-----");
+        
         Serial.println(payload);
         Serial.println("-----------------------");
         netState = NET_CONNECTED;
@@ -545,12 +513,9 @@ class CGPRSRemoteStarter
         Serial.println("failed");
         errors++;
       }
-    
-      Serial.println("Waiting 3 seconds...");
-      delay(3000);
-      return 1;
-
+      return 0;
     }
+
 
 
 };
@@ -558,13 +523,10 @@ CGPRSRemoteStarter rstart;
 
 void setup()
 {
-  rstart.setup();
+  rstart.doSetup();
 }
 
 void loop()
 {
-  rstart.loop();
+  rstart.doLoop();
 }
-
-
-
