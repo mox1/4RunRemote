@@ -182,13 +182,14 @@ class CGPRSRemoteStarter {
         Serial.println("Failed Step 3 (init cell network)");
         return -3;
       }
+      delay(5000);
       //(OPTIONAL) Step 4 - get various network info
-      if (sim.getOperatorName()) {
-        Serial.print("Operator:");
-        Serial.println(sim.buffer);
-      }
+      //if (sim.getOperatorName()) {
+      //  Serial.print("Operator:");
+      //  Serial.println(sim.buffer);
+      //}
 
-      Serial.print("Obtaining IP address...");
+      //Serial.print("Obtaining IP address...");
       const char *ip = sim.getIP();
       if (ip) {
         Serial.print(ip);
@@ -203,14 +204,14 @@ class CGPRSRemoteStarter {
         Serial.println("dB");
       }
       //Step 5 - Do HTTP connection
-      Serial.print("Step 5 - Init HTTP...");
+      //Serial.print("Step 5 - Init HTTP...");
       if (sim.httpOpen()) {
         Serial.println("OK");
       } else {
         Serial.println("NO");
       }
       //Step 6 - connect to HTTP server
-      Serial.println("Step 6 - connecting to HTTP server.");
+      //Serial.println("Step 6 - connecting to HTTP server.");
       sim.xbPurge();
       if (!sim.httpConnect(HTTP_SERVER_HOST, HTTP_SERVER_PORT)) {
         Serial.println("Error connecting ");
@@ -232,10 +233,10 @@ class CGPRSRemoteStarter {
       char *payload;
       if (sim.httpReceive(&payload)) {
         Serial.println("OK");
-        Serial.println("-----HTTP RESPONSE-----");
+        //Serial.println("-----HTTP RESPONSE-----");
         
         Serial.println(payload);
-        Serial.println("-----------------------");
+        //Serial.println("-----------------------");
         netState = NET_CONNECTED;
         errors = 0;
       } else {

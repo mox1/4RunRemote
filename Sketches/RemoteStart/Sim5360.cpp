@@ -31,7 +31,7 @@ class CSIM5360 : public COBDSPI {
         do {
           Serial.print('.');
           delay(3000);
-          success = netSendCommand("AT+CPSI?\r", 1000, "Online");
+          success = netSendCommand("AT+CPSI?\r", 3000, "Online");
           if (success) {
             if (!strstr_P(buffer, PSTR("NO SERVICE")))
               break;
@@ -179,6 +179,7 @@ class CSIM5360 : public COBDSPI {
           \r\n+CHTTPSRECV: 0\r\n
         */
         if (netSendCommand("AT+CHTTPSRECV=384\r", MAX_CONN_TIME, "+CHTTPSRECV:", true)) {
+          Serial.println("GOT RESP!");
           char *p = strstr(buffer, "+CHTTPSRECV:");
           if (p) {
             p = strchr(p, ',');
