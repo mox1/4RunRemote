@@ -9,6 +9,7 @@ class CSIM5360 : public COBDSPI {
     {
       for (byte n = 0; n < 3; n++) {
         // try turning on module
+        Serial.println("toggle Xb power");
         xbTogglePower();
         sleep(3000);
         // discard any stale data
@@ -48,13 +49,13 @@ class CSIM5360 : public COBDSPI {
         if (!success) break;
 
         do {
-          success = netSendCommand("AT+CGREG?\r",1000, "+CGREG: 0,1");
+          success = netSendCommand("AT+CGREG?\r",5000, "+CGREG: 0,1");
         } while (!success && millis() - t < 30000);
         if (!success) break;
 
         do {
           sprintf_P(buffer, PSTR("AT+CGSOCKCONT=1,\"IP\",\"%s\"\r"), apn);
-          success = netSendCommand(buffer);
+          success = netSendCommand(buffer,5000);
         } while (!success && millis() - t < 30000);
         if (!success) break;
 
@@ -177,7 +178,7 @@ class CSIM5360 : public COBDSPI {
           [XX bytes from server]\r\n
           \r\n+CHTTPSRECV: 0\r\n
         */
-        if (netSendCommand("AT+CHTTPSRECV=384\r", MAX_CONN_TIME, "+CHTTPSRECV: 0", true)) {
+        if (netSendCommand("AT+CHTTPSRECV=384\r", MAX_CONN_TIME, "+CHTTPSRECV:", true)) {
           char *p = strstr(buffer, "+CHTTPSRECV:");
           if (p) {
             p = strchr(p, ',');

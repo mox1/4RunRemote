@@ -145,7 +145,7 @@ public:
 	// purge xBee UART buffer
 	void xbPurge();
 	// toggle xBee module power
-	void xbTogglePower();
+	bool xbTogglePower();
 	// get connection state
 	OBD_STATES getState() { return m_state; }
 	// delay specified number of ms
@@ -181,6 +181,7 @@ protected:
 	virtual void idleTasks() { delay(1); }
 	OBD_STATES m_state = OBD_DISCONNECTED;
 	byte m_target = TARGET_OBD;
+	bool xbState = false;
 private:
 	uint8_t getPercentageValue(char* data)
 	{

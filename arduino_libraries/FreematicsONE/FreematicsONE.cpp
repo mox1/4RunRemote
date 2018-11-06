@@ -792,8 +792,10 @@ void COBDSPI::xbPurge()
 	sendCommand("ATCLRGSM\r", buf, sizeof(buf));
 }
 
-void COBDSPI::xbTogglePower()
+bool COBDSPI::xbTogglePower()
 {
 	char buf[32];
 	sendCommand("ATGSMPWR\r", buf, sizeof(buf));
+	xbState = !xbState;
+	return xbState;
 }
